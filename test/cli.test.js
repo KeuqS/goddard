@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(root, 'bin', 'goddard.js');
 const sqliteRejectingLoader = pathToFileURL(path.join(root, 'test', 'fixtures', 'reject-sqlite-loader.mjs')).href;
 
-for (const args of [['--version'], ['--help'], ['help'], []]) {
+for (const args of [['--version'], ['-v'], ['--help'], ['-h'], ['help'], []]) {
   test(`lightweight command ${args.join(' ') || '(no arguments)'} does not load SQLite`, () => {
     const result = spawnSync(process.execPath, [
       '--experimental-loader', sqliteRejectingLoader,
@@ -18,7 +18,7 @@ for (const args of [['--version'], ['--help'], ['help'], []]) {
 
     assert.equal(result.status, 0, result.stderr);
     assert.doesNotMatch(result.stderr, /SQLite must not be loaded/);
-    if (args[0] === '--version') assert.equal(result.stdout.trim(), '0.4.0');
+    if (args[0] === '--version' || args[0] === '-v') assert.equal(result.stdout.trim(), '0.4.0');
     else assert.match(result.stdout, /Usage: goddard/);
   });
 }
