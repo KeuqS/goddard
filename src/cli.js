@@ -1,15 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { Store } from './store.js';
 import { atomicWrite, readJSON, version, packageVersion } from './util.js';
 import { checkpointFile, ingestCheckpoint, seedCheckpoint, validateCheckpoint } from './checkpoint.js';
 import { captureWorkspace } from './workspace.js';
 import { exportBundle, importBundle, unpackBundle, writeHandoff } from './handoff.js';
-import { runWithAccounts } from './runner.js';
-import { AccountPool, loginProfile, probeProfile, profileEnv } from './accounts.js';
-import { CodexAdapter } from './adapters/codex.js';
-import { resolvePermissions } from './permissions.js';
 
 const help = `Goddard ${packageVersion} — durable handoffs between coding agents
 
@@ -83,6 +78,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (!command || flags.help || command === 'help') { console.log(help); return; }
   const workspace = path.resolve(flags.workspace);
   if (command === 'accounts' || command === 'login') {
+    const { AccountPool, loginProfile, probeProfile, profileEnv } = await import('./accounts.js');
     if (!['codex', 'claude'].includes(flags.agent)) throw new Error('--agent must be codex or claude.');
     const pool = new AccountPool();
     try {
@@ -122,6 +118,7 @@ export async function main(argv = process.argv.slice(2)) {
     print(unpackBundle(path.resolve(target), path.resolve(flags.out))); return;
   }
   if (command === 'doctor') {
+    const { CodexAdapter } = await import('./adapters/codex.js');
     const result = { node: process.version, workspace, providers: {} };
     for (const name of ['codex', 'claude']) {
       try { result.providers[name] = version(name); } catch (error) { result.providers[name] = { error: error.message }; }
@@ -144,6 +141,7 @@ export async function main(argv = process.argv.slice(2)) {
     print(result); return;
   }
   if (!['init', 'new', 'list', 'run', 'status', 'note', 'checkpoint', 'handoff', 'export', 'import', 'recover'].includes(command)) throw new Error(`Unknown command: ${command}. Use --help.`);
+  const { Store } = await import('./store.js');
   const store = new Store(workspace, { create: command === 'init' });
   try {
     if (command === 'init') {
@@ -191,12 +189,14 @@ export async function main(argv = process.argv.slice(2)) {
       print(await exportBundle(store, task, path.resolve(flags.out))); return;
     }
     if (!['codex', 'claude'].includes(flags.agent)) throw new Error('--agent must be codex or claude.');
+    const { resolvePermissions } = await import('./permissions.js');
     const permissions = resolvePermissions({ provider: flags.agent, readOnly: flags['read-only'],
       bypassPermissions: flags['dangerously-skip-permissions'], claudePermissionMode: flags['claude-permission-mode'] });
     if (flags.interactive && flags['non-interactive']) throw new Error('Choose either --interactive or --non-interactive.');
     if (flags.effort && !/^[a-z][a-z0-9_-]{0,49}$/.test(flags.effort)) throw new Error('--effort must be a provider effort level, such as low, medium, or high.');
     if (flags.agent === 'claude' && flags.effort && !['low', 'medium', 'high', 'xhigh', 'max'].includes(flags.effort)) throw new Error('Claude --effort must be low, medium, high, xhigh, or max (subject to model support).');
     if (flags.interactive && !(process.stdin.isTTY && process.stdout.isTTY)) throw new Error('--interactive requires a terminal. Use --non-interactive for redirected input.');
+    const { runWithAccounts } = await import('./runner.js');
     const numeric = (key, min, max) => { const value = Number(flags[key]); if (!Number.isFinite(value) || value < min || value > max) throw new Error(`--${key} must be between ${min} and ${max}.`); return value; };
     const options = { provider: flags.agent, account: flags.account, noFailover: flags['no-failover'], model: flags.model, effort: flags.effort, readOnly: flags['read-only'],
       plain: flags.plain, noColor: flags['no-color'],
